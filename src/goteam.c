@@ -2,13 +2,14 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <time.h>
 
 #define MAX_SIZE 19
 
 char board[MAX_SIZE][MAX_SIZE];
 int board_size = 5;
 
-// Go table
+/* Initialize the board with dots (empty spaces) */
 void clear_board() {
     for (int r = 0; r < MAX_SIZE; r++) {
         for (int c = 0; c < MAX_SIZE; c++) {
@@ -17,22 +18,28 @@ void clear_board() {
     }
 }
 
-// print table 
-void showboard() {
+/* Print the board in the exact GTP format shown in the PDF */
+void show_board() {
     printf("= \n");
-    printf("  ");
-    for (int c = 0; c < board_size; c++) printf(" %c", 'A' + c);
+    printf("   ");
+    for (int c = 0; c < board_size; c++) {
+        char col_char = (c >= 8) ? 'A' + c + 1 : 'A' + c;
+        printf("%c ", col_char);
+    }
     printf("\n");
 
     for (int r = 0; r < board_size; r++) {
-        printf("%d ", board_size - r);
+        printf("%2d ", board_size - r);
         for (int c = 0; c < board_size; c++) {
             printf("%c ", board[r][c]);
         }
         printf("%d\n", board_size - r);
     }
-    printf("  ");
-    for (int c = 0; c < board_size; c++) printf(" %c", 'A' + c);
+    printf("   ");
+    for (int c = 0; c < board_size; c++) {
+        char col_char = (c >= 8) ? 'A' + c + 1 : 'A' + c;
+        printf("%c ", col_char);
+    }
     printf("\n\n");
 }
 
@@ -40,16 +47,32 @@ int main() {
     char line[1024];
     char cmd[256];
     
+    /* Seed random number generator and initialize board */
+    srand(time(NULL));
     clear_board();
-    setbuf(stdout, NULL); 
+    
+    /* Disable stdout buffering for immediate communication with controller */
+    setbuf(stdout, NULL);
 
     while (fgets(line, sizeof(line), stdin)) {
+        /* Extract command from the input line */
         if (sscanf(line, "%s", cmd) != 1) continue;
 
-        if (strcmp(cmd, "boardsize") == 0) {
-            sscanf(line, "boardsize %d", &board_size);
-            clear_board();
-            printf("= \n\n");
+        if (strcmp(cmd, "protocol_version") == 0) {
+            printf("= 2\n\n");
+        }
+        else if (strcmp(cmd, "name") == 0) {
+            printf("= GTP\n\n");
+        }
+        else if (strcmp(cmd, "boardsize") == 0) {
+            int size;
+            if (sscanf(line, "boardsize %d", &size) == 1 && size <= MAX_SIZE) {
+                board_size = size;
+                clear_board();
+                printf("= \n\n");
+            } else {
+                printf("? unacceptable size\n\n");
+            }
         }
         else if (strcmp(cmd, "komi") == 0) {
             printf("= \n\n");
@@ -59,16 +82,23 @@ int main() {
             printf("= \n\n");
         }
         else if (strcmp(cmd, "showboard") == 0) {
-            showboard();
+            show_board();
         }
         else if (strcmp(cmd, "play") == 0) {
             char color[10], pos[10];
-            sscanf(line, "play %s %s", color, pos);
-            
-            if (strcmp(pos, "pass") != 0 && strcmp(pos, "PASS") != 0) {
-                int col = toupper(pos[0]) - 'A';
-                int row = board_size - atoi(&pos[1]);
-                board[row][col] = (tolower(color[0]) == 'b') ? 'X' : 'O';
+            if (sscanf(line, "play %s %s", color, pos) == 2) {
+                /* If move is not a PASS, place the stone */
+                if (tolower(pos[0]) != 'p') { 
+                    int col = toupper(pos[0]) - 'A';
+                    /* Skip 'I' in Go coordinates */
+                    if (toupper(pos[0]) > 'I') col--;
+                    int row = board_size - atoi(&pos[1]);
+                    
+                    /* Bounds check before placing stone */
+                    if (row >= 0 && row < board_size && col >= 0 && col < board_size) {
+                        board[row][col] = (tolower(color[0]) == 'b') ? 'X' : 'O';
+                    }
+                }
             }
             printf("= \n\n");
         }
@@ -76,27 +106,43 @@ int main() {
             char color[10];
             sscanf(line, "genmove %s", color);
             
-            
-            int move_made = 0;
-            for (int r = 0; r < board_size && !move_made; r++) {
-                for (int c = 0; c < board_size && !move_made; c++) {
+            /* Store all empty positions for random selection */
+            int empty_r[MAX_SIZE * MAX_SIZE];
+            int empty_c[MAX_SIZE * MAX_SIZE];
+            int count = 0;
+
+            for (int r = 0; r < board_size; r++) {
+                for (int c = 0; c < board_size; c++) {
                     if (board[r][c] == '.') {
-                        board[r][c] = (tolower(color[0]) == 'b') ? 'X' : 'O';
-                        printf("= %c%d\n\n", 'A' + c, board_size - r);
-                        move_made = 1;
+                        empty_r[count] = r;
+                        empty_c[count] = c;
+                        count++;
                     }
                 }
             }
-            if (!move_made) printf("= PASS\n\n");
+
+            if (count > 0) {
+                /* Pick a random empty spot */
+                int idx = rand() % count;
+                int r = empty_r[idx];
+                int c = empty_c[idx];
+                board[r][c] = (tolower(color[0]) == 'b') ? 'X' : 'O';
+                char col_char = (c >= 8) ? 'A' + c + 1 : 'A' + c;
+                printf("= %c%d\n\n", col_char, board_size - r);
+            } else {
+                printf("= PASS\n\n");
+            }
         }
         else if (strcmp(cmd, "final_score") == 0) {
-            printf("= B+8.5\n\n"); 
+            /* Returns a dummy score to complete the game flow */
+            printf("= B+8.5\n\n");
         }
         else if (strcmp(cmd, "quit") == 0) {
             printf("= \n\n");
             break;
         }
         else {
+            /* Generic success response for unknown/unimplemented commands */
             printf("= \n\n");
         }
     }

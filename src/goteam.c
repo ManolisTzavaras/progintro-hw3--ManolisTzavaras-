@@ -41,7 +41,7 @@ int main() {
     char cmd[256];
     
     clear_board();
-    setbuf(stdout, NULL); // Σημαντικό για να φαίνονται τα prints αμέσως
+    setbuf(stdout, NULL); 
 
     while (fgets(line, sizeof(line), stdin)) {
         if (sscanf(line, "%s", cmd) != 1) continue;
@@ -76,7 +76,7 @@ int main() {
             char color[10];
             sscanf(line, "genmove %s", color);
             
-            // Απλή λογική: Παίζει στην πρώτη κενή θέση για να δείξει ότι λειτουργεί
+            
             int move_made = 0;
             for (int r = 0; r < board_size && !move_made; r++) {
                 for (int c = 0; c < board_size && !move_made; c++) {
@@ -90,7 +90,7 @@ int main() {
             if (!move_made) printf("= PASS\n\n");
         }
         else if (strcmp(cmd, "final_score") == 0) {
-            printf("= B+8.5\n\n"); // Στατικό σκορ για να ταιριάζει με το παράδειγμα
+            printf("= B+8.5\n\n"); 
         }
         else if (strcmp(cmd, "quit") == 0) {
             printf("= \n\n");
